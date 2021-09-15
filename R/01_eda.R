@@ -6,7 +6,6 @@
 
 if (!require("pacman")) install.packages("pacman")
 pacman::p_load("tidyverse", "skimr", "lubridate", "patchwork", "DataExplorer")
-pacman::p_load("matrixprofiler")
 
 # 1. Data -----------------------------------------------------------------
 
@@ -15,6 +14,36 @@ dt_net <- read_csv("data/sonoma-data-net.csv")
 
 skim(dt_log)
 skim(dt_net)
+
+# Epoch
+
+dt_log %>%
+  ggplot(aes(x = epoch)) +
+  geom_histogram(binwidth = 300)
+
+dt_net %>%
+  ggplot(aes(x = epoch)) +
+  geom_histogram(binwidth = 300)
+
+# Parent
+
+dt_log %>%
+  ggplot(aes(x = parent)) +
+  geom_histogram()
+
+dt_net %>%
+  ggplot(aes(x = parent)) +
+  geom_histogram()
+
+dt_log %>%
+  ggplot(aes(x = voltage)) +
+  geom_histogram(binwidth = 0.1)
+
+dt_net %>%
+  ggplot(aes(x = voltage)) +
+  geom_histogram(binwidth = 10)
+
+# Voltage is off, we have to divide the values in dt_net by 100
 
 # Humidity
 

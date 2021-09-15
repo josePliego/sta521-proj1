@@ -1,0 +1,201 @@
+---
+title: "Draft"
+author: "Jose Pliego"
+date: "9/14/2021"
+output: 
+  pdf_document: 
+    fig_height: 4
+    fig_width: 6
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = FALSE,
+  warning = FALSE,
+  message = FALSE,
+  fig.align = 'center'
+  )
+```
+
+```{r}
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load("tidyverse", "viridis", "DataExplorer", "lubridate", "janitor")
+```
+
+```{r}
+dt_log_raw <- read_csv("data/sonoma-data-log.csv")
+dt_net_raw <- read_csv("data/sonoma-data-net.csv")
+```
+
+
+# 2. Data Cleaning
+## (a)
+**Check histograms of each variable in two data files (Plot only the ones that you think are interesting or relevant). Which variable is not consistent? Convert the data to the same range. NO CODE but explain clearly what you did.**
+
+By looking at the histograms we can see that there are some disparities in the data regarding the variable `voltage`. After reading the user manual for the MICA2DOT platform that was used in the study, we found out that the data retrieved from the network has the measurements from the ADC. According to the documentation, we can convert these measurements to battery voltage using the following equation (see page 23 of the manual):
+$$V_{batt} = V_{ref}\times ADC_FS/ADC_Count,$$ where $V_{batt}$ is the battery voltage, $V_{ref} = 0.6$ is the external voltage reference, $ADC_FS = 1024$ is the resolution of the ADC, and $ADC_Count$ is the value observed by the monitor.
+
+```{r}
+dt_log_raw %>%
+  ggplot(aes(x = voltage)) +
+  geom_histogram(binwidth = 0.1, fill = viridis(1)) +
+  labs(
+    title = "Histogram of Voltage",
+    subtitle = "Data retrieved from the flash logs",
+    x = "Voltage",
+    y = "Count"
+  ) +
+  theme_bw()
+
+dt_net_raw %>%
+  ggplot(aes(x = 0.6 * 1024/voltage)) +
+  geom_histogram(binwidth = 0.1, fill = viridis(1)) +
+  labs(
+    title = "Histogram of Voltage",
+    subtitle = "Data retrieved over the wireless network",
+    x = "0.6 X 1024/Voltage",
+    y = "Count"
+  ) +
+  theme_bw()
+```
+
+We can appreciate that voltage is in a similar scale when making the adjustment mentioned above. We talk about how we dealt with outliers later in this report. For now, we concatenate both data sets and filter out repeated rows, using the fact that `nodeid` and `epoch` together are a unique identifier for one measure. In the case when we have the same values for `nodeid` and `epoch` but differences in other variables, we try to keep the values observer in the data retrieved for the network. If that is not possible (because the repeated identifiers are in the log data), we average the values for the variables. No combination of `nodeid` and `epoch` appears more than two times, and only 94 combinations were repeated after discarding the variables that were not used in this project (`parent`, `depth`, and `humid_adj`).
+
+```{r}
+vars <- c(
+  "epoch", "nodeid", "voltage", "humidity", "humid_temp", "hamatop", "hamabot"
+  )
+
+dt_net <- dt_net_raw %>%
+  mutate(voltage = 0.6 * 1024/voltage) %>%
+  select(-result_time) %>% 
+  distinct() %>%
+  mutate(id = paste0(nodeid, "_", epoch))
+
+# http://www-db.ics.uci.edu/pages/research/quasar/MPR-MIB%20Series%20User%20Manual%207430-0021-06_A.pdf
+
+dt_full <- dt_net %>%
+  bind_rows(
+    dt_log_raw %>%
+      select(-result_time) %>%
+      distinct() %>%
+      mutate(id = paste0(nodeid, "_", epoch)) %>%
+      filter(!(id %in% dt_net$id))
+    ) %>%
+  select(all_of(vars)) %>% 
+  distinct() %>%
+  group_by(epoch, nodeid) %>%
+  summarise(across(where(is.double), mean), .groups = "drop")
+```
+
+## (b)
+**Remove missing data. Comment on the number of missing measurements and the cor- responding date and time period.**
+
+First, we read the `sonoma-dates` file to pair each epoch with the date and time in which the readings were taken. This way we can identify missing values in specific nodes during certain periods of time.
+
+```{r}
+txt <- read_file("data/sonoma-dates")
+txt_split <- str_split(txt, pattern = ";")
+epochs <- str_remove_all(txt_split[[1]][[1]], "epochNums = \\[")
+epochs <- str_remove_all(epochs, " \\]")
+epochs <- str_split(epochs, pattern = " ")
+epochs <- epochs[[1]]
+
+dates <- str_remove_all(txt_split[[1]][[2]], "\\n\\nepochDates = \\{")
+dates <- str_remove_all(dates, " \\}")
+dates <- str_split(dates, pattern = "' '")
+dates <- str_remove_all(dates[[1]], "'")
+dates <- str_replace_all(dates, pattern = "  ", replacement = " ")
+
+datetime_clean <- tibble("date" = dates, "epoch" = epochs) %>%
+  mutate(
+    month = str_sub(date, start = 5L, end = 7L),
+    day = str_remove_all(str_sub(date, start = 9L, end = 10L), " "),
+    year = str_sub(date, start = -4L),
+    time = str_sub(date, start = -13L, end = -6L)
+    ) %>%
+  mutate(
+    datetime = ymd_hms(
+      paste(
+        paste(year, month, day, sep = "-"),
+        time,
+        sep = " "
+        )
+      )
+    ) %>%
+  select(datetime, epoch) %>%
+  mutate(epoch = as.double(epoch))
+```
+
+
+```{r}
+dt_full_date <- dt_full %>%
+  left_join(datetime_clean, by = "epoch")
+
+DataExplorer::plot_missing(dt_full_date)
+dt_full_date %>%
+  filter(is.na(hamabot)) %>%
+  count(date(datetime), nodeid)
+```
+
+Our data set has 2.77% of missing values in `humidity`, `humid_temp`, `hamabot`, and `hamatop`. Diving deeper into these missing values we see that most of them come from node 122, which failed to register data between '2004-05-07' and '2004-05-29'. Other missing values come from node 15 which failed to register data between '2004-04-30' and '2004-05-06', and the rest come from node 128 which failed to register data between '2004-04-30' and '2004-05-05'.
+
+```{r}
+dt_nomissing <- dt_full_date %>%
+  drop_na()
+```
+
+## (c)
+**The location data is separate in another file mote-location-data.txt. Incorporate it in the main table. Hint: here the nodeid serves a key to add columns for height, direction, distance and tree. State the number of variables in your new data frame.**
+
+```{r}
+locations <- read_table("data/mote-location-data.txt") %>%
+  rename(nodeid = ID) %>%
+  janitor::clean_names()
+
+dt_locations <- dt_nomissing %>%
+  left_join(locations, by = "nodeid") %>%
+  filter(nodeid != 65535)
+```
+
+Nodes 100 and 135 have no location data. We keep these observations because they are useful for parts of the analysis that do not take into account the location of the nodes. The new data set has 310,178 rows and 12 columns (10 variables considering that `epoch` and `nodeid` are identifiers).
+
+## (d)
+**Use histogram and quantiles to visually identify easy outliers for each of the four variables: `humidity`, `humid_temp`, `hamatop`, `hamabot.` And remove them. Comment on the rationality behind your removal.**
+
+Humidity
+Initially, we remove an observation that has a value of -5145 in `humidity` to make the histogram readable.
+
+```{r}
+dt_locations %>%
+  filter(humidity > -10) %>% 
+  ggplot(aes(x = humidity)) +
+  geom_histogram() +
+  geom_vline(xintercept = 100)
+```
+
+The measure of humidity is a percentage of relative humidity. Real values of relative humidity can be greater than 100% as observed in the data, but they cannot be below 0%. Therefore, we remove values of humidity under 0%.
+
+```{r}
+dt_locations %>%
+  filter(humidity >= 0) %>% 
+  ggplot(aes(x = humidity)) +
+  geom_histogram()
+
+dt_humidity <- dt_locations %>%
+  filter(humidity >= 0) %>%
+  group_by(nodeid) %>%
+  summarise(
+    across(
+      humidity,
+      list("mean" = mean, "median" = median, "max" = max, "min" = min)
+      ),
+    .groups = "drop"
+    )
+
+dt_locations %>%
+  filter(humidity >= 0) %>%
+  ggplot(aes(x = factor(nodeid), y = humidity)) +
+  geom_boxplot()
+```
+
