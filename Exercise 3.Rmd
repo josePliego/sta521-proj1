@@ -57,7 +57,27 @@ Yes, we can represent data in lower dimension. Looking at cumulative PVE we see 
 
 ### Exercise 4-1
 
-### Exercise 4-1
+### Exercise 4-2
 
+### Exercise 5-a
 
+hist(dt_clean$hamatop)
+
+dt_clean %>% 
+select(hamatop) %>% 
+mutate(log_hamatop = log(hamatop)) %>% 
+ggplot(aes(x=log_hamatop)) + geom_histogram()
+
+hist(dt_clean$hamabot)
+
+dt_clean %>% 
+select(hamabot) %>% 
+mutate(log_hamabot = log(hamabot)) %>% 
+ggplot(aes(x=log_hamabot)) + geom_histogram()
+
+### Exercise 5-b
+
+From 3-c, we can see that incident par and reflected par vary along the different heights whereas humidity and temperature are more consistent vs height.
+
+From 3-d, we can see that incident par and reflected par from the mean depending on height. higher heights tend to have higher indicident and reflected par than lower heights.
 
