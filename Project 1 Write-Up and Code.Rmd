@@ -1,0 +1,39 @@
+---
+title: "STA 521 Project 1 Write-up + Code"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+Summary of Paper: 
+
+This paper presents a case study where a wireless sensor network is used to record 44 days in the life of a 70-meter tall redwood tree. The redwood tree is selected as interesting species to study as it is known to have substantial variation and to have substantial temporal dynamics.
+
+The case study is unique as it involves gathering a data set that was previously not obtainable by making use of new technology, a wireless sensor network “macroscope”. Previous set-ups consisting of limited apparatus had confirmed that there was variation across the tree but failed to capture detailed picture of the entire structure over time.
+
+At the end of the moth, an analysis of system performance data was performed in order to make future deployment's results more accurate. Several lessons were learned through the initial deployment. 
+
+First, when the sensors get small enough and the phenomenon gets directional enough, tiny differences in positioning get magnified into large effects on the resulting data (especially noticeable in our PAR data). During a clear day, each mote's readings fluctuated leading to the belief that foliage was blocking solar access to motes but the patterns were consistent between different days.Slightly different orientations for each light sensor resulted in different fluctuation patterns for each node, resulting in the seemingly “random”
+appearance of the light data. Our noisy data was actually a deterministic response by a highly focused sensor. 
+
+Second, the success of a deployment depends crucially on the the management
+of the network. any long-term sensor network deployment should include a network monitoring component that can provide real-time information about the performance of the system, and can
+alert the researchers when the system begins to behave abnormally. The network can then provide a means to detect and compensate for failures in the logging, while the logging
+provides a means to compensate for failures in the network.
+
+Third, having verified the existence of spatial gradients in the microclimate around a redwood tree through the deployment, and captured data over time, we can begin using this data to validate biological theories. For example, plant biologists can build a quantitative model of the effects of microclimatic gradients on the sap flow rate using obtained data to quantify previous knowledge of the impacts of humidity, air temperature and PAR on sap flow rate.
+
+Data Collection:
+
+Gathering data on the environmental dynamics around the redwood tree involved careful system design and deployment methods. Before placing into the field, two calibration checks (roof and chamber) were performed. Roof and chamber calibration checks confirmed robust performance for different subsets of the used sensors. The roof calibration allowed Tolle and team to establish PAR sensors' readings were acceptable. The chamber calibration involved a two-point calibration to obtain accurate results for humidity and temperature.
+
+Once in the field, the electronics used needed to be protected from the weather while safely exposing the sensors.In terms of time frame, information is gathered for sensors every 5 minutes during a month in the early summer (contains the most dynamic microclimatic variation). The nodes were placed on the west side of the tree (thicker canopy provides protection from environmental effects) from 15m above ground level to around 70m, with roughly 2m meeting in between notes and at a radial distance of 0.1m-1m from the trunk. In additional, several nodes where added outside of angular and radial envelope to measure miclimate in the immediate vicinity.
+
+The choice of measured parameters was driven by the biological requirements. We measured traditional climate variables – temperature, humidity, and light levels. Temperature and relative humidity feed relate to transpiration. Photosynthetically active radiation (PAR) provides information about energy available for photosynthesis and tells us about drivers for the carbon balance in the forest The choice of measured parameters was driven by the biological requirements. Total Solar Radiation (TSR) was ignored as the sensor was too sensitive and we were already measuring PAR. Moreover, barometric pressure was excluded as it is simply too difuse to show important differences.
+
+With regards to collection
+
+To provide a backup in case of network failure and to establish a basis for analyzing the performance of the net-work, we extended the TASK framework to include a local data logging system. The data logger recorded every reading taken by every query before the readings were passed to the multi-hop routing layer, and stopped recording once the 512 kB ﬂash chip was full. After the deployment, we attached each mote to a serial connection, and then installed a new program to transmit the contents of the ﬂash over the serial link. We chose to include a complete data logger because we knew that the capacity of the ﬂash was suÿcient for the duration of our deployment.
