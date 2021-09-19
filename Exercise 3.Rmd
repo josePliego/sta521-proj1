@@ -1,0 +1,63 @@
+---
+title: "Exercise 3"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Exercise 3-1
+
+```{r}
+library(tidyverse)
+library(GGally)
+library(lubridate)
+dt_clean = read_rds("data/dt_clean.rds")
+dt_clean_week = dt_clean %>%
+  filter(date(datetime) < "2004-05-05")
+
+variables = c("humidity", "humid_temp","hamabot","hamatop")
+dt_clean_week[,variables] %>% 
+ggpairs()
+
+```
+
+We decided to plot scatterplots using time period of 1 week. We found this to be reasonable as some nodes began failing afterwards. We notice similar correlation structure between the weeks. We observe that Incident and Reflected PAR have significant positive correlation (~0.475). This is expected as both measures relate to sunlight. Additionally, humidity and temperature are strongly, negatively correlated (~0.671), which makes sense because according to the paper, in California, warm days are dry and colder days are humid.
+
+### Exercise 3-2
+
+```{r}
+variables = c("humidity", "humid_temp","hamabot","hamatop", "voltage", "height", "dist")
+dt_clean_week[,variables] %>% 
+ggpairs()
+```
+
+We added voltage, height and distance to check if they have correlation with incident PAR. We notice that in addition to the positive association between, Incident and Reflected PAR, there is a positive association between Incident PAR and height ~0.305. This makes sense because the higher up the node, the more the exposure to sunlight.
+
+### Exercise 3-3
+
+### Exercise 3-4
+
+```{r}
+variables = c("humidity", "humid_temp","hamabot","hamatop","height","dist")
+pca.in = dt_clean[,variables] %>% filter(!is.na(height))
+pr.out <- prcomp(pca.in, scale = T)
+```
+
+```{r}
+pve = 100 * pr.out$sdev^2 / sum(pr.out$sdev ^2)
+par (mfrow = c (1 , 2))
+plot(pve,type = "o",ylab ="PVE",xlab = "Principal Component", col ="blue")
+plot (cumsum (pve), type = "o",ylab ="Cumulative PVE", xlab =" Principal Component ",col=" brown3")
+pr.out$rotation
+```
+
+Yes, we can represent data in lower dimension. Looking at cumulative PVE we see that including 3 or 4 principal components allows us to retain around 80%, 90% of variance respectively while eliminating 3,4 dimensions with less variance.
+
+### Exercise 4-1
+
+### Exercise 4-1
+
+
+
