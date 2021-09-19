@@ -236,5 +236,6 @@ dt_clean <- dt_clean %>%
   filter(nodeid != 40)
 
 dt_clean %>%
+  mutate(across(c(hamatop, hamabot), ~.x/54)) %>% 
   write_rds("data/dt_clean.rds")
 ```
