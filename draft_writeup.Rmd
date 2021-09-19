@@ -163,39 +163,78 @@ Nodes 100 and 135 have no location data. We keep these observations because they
 ## (d)
 **Use histogram and quantiles to visually identify easy outliers for each of the four variables: `humidity`, `humid_temp`, `hamatop`, `hamabot.` And remove them. Comment on the rationality behind your removal.**
 
-Humidity
-Initially, we remove an observation that has a value of -5145 in `humidity` to make the histogram readable.
+```{r}
+dt_locations %>%
+  ggplot(aes(x = humidity)) +
+  geom_histogram()
+```
+
+This histogram show a value for `humidity` below -5000, which is clearly a misreading. Instead of cleaning each variable individually, we first follow the process outlined in the paper of checking unusual readings in the voltage.
 
 ```{r}
 dt_locations %>%
-  filter(humidity > -10) %>% 
+  ggplot(aes(x = voltage)) +
+  geom_histogram()
+
+dt_clean <- dt_locations %>%
+  filter(voltage > 2.4, voltage < 3)
+```
+
+First, we remove the nodes that have voltage readings under 2.4 or above 3 because, as mentioned in the paper, these nodes yield unreliable readings in the variables of interest. Even though some of the reading under outlier voltage were not outliers in each variable, we chose to remove them so we don't risk performing the analysis with unreliable data. We can see that by removing the voltage outilers, the humidity outliers are also removed from the data.
+
+```{r}
+dt_clean %>%
   ggplot(aes(x = humidity)) +
-  geom_histogram() +
-  geom_vline(xintercept = 100)
+  geom_histogram()
 ```
 
 The measure of humidity is a percentage of relative humidity. Real values of relative humidity can be greater than 100% as observed in the data, but they cannot be below 0%. Therefore, we remove values of humidity under 0%.
 
+ Temperature
+ We filter four readings that are considerably higher than all the other points. These rows have temperature values of 122 and 117, while the rest of the readings are below 45.
+ 
 ```{r}
-dt_locations %>%
-  filter(humidity >= 0) %>% 
-  ggplot(aes(x = humidity)) +
+dt_clean %>%
+  ggplot(aes(x = humid_temp)) +
   geom_histogram()
 
-dt_humidity <- dt_locations %>%
-  filter(humidity >= 0) %>%
-  group_by(nodeid) %>%
-  summarise(
-    across(
-      humidity,
-      list("mean" = mean, "median" = median, "max" = max, "min" = min)
-      ),
-    .groups = "drop"
-    )
+dt_clean %>%
+  select(humid_temp) %>%
+  arrange(-humid_temp)
 
-dt_locations %>%
-  filter(humidity >= 0) %>%
-  ggplot(aes(x = factor(nodeid), y = humidity)) +
-  geom_boxplot()
+dt_clean <- dt_clean %>%
+  filter(humid_temp < 50)
+
+dt_clean %>%
+  ggplot(aes(x = humid_temp)) +
+  geom_histogram()
 ```
+ 
+hamatop hamabot
 
+```{r}
+# Reflected
+dt_clean %>%
+  ggplot(aes(x = hamabot/54)) +
+  geom_histogram()
+
+dt_clean %>%
+  mutate(hamabot = hamabot/54) %>% 
+  select(hamabot) %>%
+  arrange(-hamabot)
+
+# Incident
+dt_clean %>% 
+  ggplot(aes(x = hamatop/54)) +
+  geom_histogram()
+
+dt_clean %>% 
+  ggplot(aes(y = hamatop/54, x = factor(nodeid))) +
+  geom_boxplot()
+
+dt_clean <- dt_clean %>%
+  filter(nodeid != 40)
+
+dt_clean %>%
+  write_rds("data/dt_clean.rds")
+```
