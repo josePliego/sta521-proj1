@@ -1,0 +1,566 @@
+---
+title: "Project 1 - Redwood Data Report"
+author:
+- Johnny Antoun (StudentID)
+- Jose Pliego (2716768)
+date: "September 23, 2021"
+output:
+  bookdown::pdf_document2:
+    toc: true
+    # fig_height: 4
+    # fig_width: 6
+bibliography: sta521-proj1.bib
+header-includes:
+- \usepackage{caption}
+- \usepackage{float}
+- \floatplacement{figure}{H}
+---
+
+\fontsize{10}{12}
+\fontseries{m}
+\selectfont
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = FALSE,
+  warning = FALSE,
+  message = FALSE
+  )
+```
+
+```{r libraries, include=FALSE}
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load(
+  "tidyverse",
+  "viridis",
+  "DataExplorer",
+  "lubridate",
+  "janitor",
+  "patchwork",
+  "latex2exp",
+  "factoextra"
+)
+```
+
+```{r data}
+dt_log_raw <- read_csv("data/sonoma-data-log.csv")
+dt_net_raw <- read_csv("data/sonoma-data-net.csv")
+```
+
+\newpage
+
+# Data Collection
+## Paper Summary
+
+The paper by @tolle presents a case study in which a wireless sensor network is used to record 44 days in the life of a 70-meter tall redwood tree. The redwood tree is selected as an interesting species to study as it is known to have substantial variation and to have significant temporal dynamics. The case study is unique as it involves gathering a data set that was previously not obtainable by making use of new technology, a wireless sensor network ("macroscope”). Previous set-ups consisting of limited apparatus had confirmed that there was variation across the tree but failed to capture a detailed picture of the entire structure over time. By the end of the moth, an analysis of system performance data was performed in order to make future deployments' results more accurate. Several lessons were learned through the initial deployment.
+
+First, when the sensors get small enough and the phenomenon gets directional enough, tiny differences in positioning get magnified into large effects on the resulting data (especially noticeable in PAR data). During a clear day, each mote's readings fluctuated leading to the belief that foliage was blocking solar access to motes but the patterns were consistent between different days. Slightly different orientations for each light sensor resulted in different fluctuation patterns for each node, yielding the seemingly “random” appearance of the light data. The noisy data was actually a deterministic response by a highly focused sensor.
+
+Second, the success of a deployment depends crucially on the management of the network. Any long-term sensor network deployment should include a network monitoring component that can provide real-time information about the performance of the system, and can alert the researchers when the system begins to behave abnormally. The network can then provide a means to detect and compensate for failures in the logging, while the logging provides a means to compensate for failures in the network.
+
+Third, having verified the existence of spatial gradients in the microclimate around a redwood tree through the deployment, and captured data over time, the data can then be used to validate biological theories. For example, plant biologists can build a quantitative model of the effects of microclimatic gradients on the sap flow rate using obtained data to quantify previous knowledge of the impacts of humidity, air temperature, and PAR on sap flow rate.
+
+## Data Collection Process
+
+Gathering data on the environmental dynamics around the redwood tree involved careful system design and deployment methods. Before placing into the field, two calibration checks (roof and chamber) were performed. Roof and chamber calibration checks confirmed robust performance for different subsets of the used sensors. The roof calibration allowed the researchers to establish that PAR sensor readings were acceptable. The chamber calibration involved a two-point calibration to obtain accurate results for humidity and temperature.
+
+Once in the field, the electronics used needed to be protected from the weather while safely exposing the sensors. In terms of time frame, information is gathered for sensors every 5 minutes during a month in the early summer, which contains the most dynamic microclimatic variation. The nodes were placed on the west side of the tree (thicker canopy provides protection from environmental effects) from 15m above ground level to around 70m, with roughly 2m between nodes and at a radial distance of 0.1m-1m from the trunk. In additional, several nodes where added outside of angular and radial envelope to measure microclimate in the immediate vicinity.
+
+The choice of measured parameters was driven by the biological requirements. Traditional climate variables were measured like temperature, humidity, and light levels. Temperature and relative humidity feed relate to transpiration. Photosynthetically active radiation (PAR) provides information about energy available for photosynthesis and gives information about drivers for the carbon balance in the forest. Total Solar Radiation (TSR) was ignored as the sensor was too sensitive and PAR was being measured. Moreover, barometric pressure was excluded as it is simply too diffuse to show important differences.
+
+To provide a backup in case of network failure and to establish a basis for analyzing the performance of the net-work, the researchers extended the TASK framework to include a local data logging system. The data logger recorded every reading taken by every query before the readings were passed to the multi-hop routing layer, and stopped recording once the 512 kB flash chip was full. After the deployment, they attached each mote to a serial connection, and then installed a new program to transmit the contents of the flash over the serial link. They chose to include a complete data logger because they knew that the capacity of the flash was sufficient for the duration of the deployment.
+
+# Data Cleaning
+
+By looking at the histograms for the different variables, we can see that there are some disparities in the files regarding the variable `voltage`. After reading the user manual (see @micadot, p.23) for the MICA2DOT platform that was used in the study, we found out that the data retrieved from the network has the measurements from the ADC. According to the documentation, we can convert these measurements to battery voltage using the following equation:
+$$V_{batt} = V_{ref}\times ADC\_FS/ADC\_Count,$$ where $V_{batt}$ is the battery voltage, $V_{ref} = 0.6$ is the external voltage reference, $ADC\_FS = 1024$ is the resolution of the ADC, and $ADC\_Count$ is the value observed by the monitor. After doing this conversion, figure \@ref(fig:fig1) shows that the readings are coherent between both data sets.
+
+```{r fig1, fig.cap="Voltage reading in the log (left) and network (right) data.", fig.width=15, fig.height=3}
+p1 <- dt_log_raw %>%
+  ggplot(aes(x = voltage)) +
+  geom_histogram(binwidth = 0.1, fill = viridis(1)) +
+  labs(
+    title = "",
+    x = "Voltage",
+    y = ""
+  ) +
+  theme_bw() +
+  theme(
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank()
+  )
+
+p2 <- dt_net_raw %>%
+  ggplot(aes(x = 0.6 * 1024/voltage)) +
+  geom_histogram(binwidth = 0.1, fill = viridis(1)) +
+  labs(
+    title = "",
+    x = "0.6 X 1024/Voltage",
+    y = ""
+  ) +
+  theme_bw() +
+  theme(
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank()
+  )
+p1 | p2
+```
+
+We talk about how we dealt with outliers later in this report. For now, we concatenate both data sets and filter out repeated rows, using the fact that `nodeid` and `epoch` together are a unique identifier for one measure. In the case when we have the same values for `nodeid` and `epoch` but differences in other variables, we try to keep the values observed in the data retrieved from the network. If that is not possible (because the repeated identifiers are in the log data), we average the values for the variables. No combination of `nodeid` and `epoch` appears more than two times, and only 94 combinations were repeated after discarding the variables that were not used in this project (`parent`, `depth`, and `humid_adj`). The resulting data frame has 319,031 rows and 7 variables.
+
+```{r bind}
+vars <- c(
+  "epoch", "nodeid", "voltage", "humidity", "humid_temp", "hamatop", "hamabot"
+  )
+dt_full <- dt_net_raw %>%
+  mutate(voltage = 0.6 * 1024/voltage) %>%
+  select(-result_time) %>% 
+  distinct() %>%
+  mutate(id = paste0(nodeid, "_", epoch)) %>% 
+  bind_rows(
+    dt_log_raw %>%
+      select(-result_time) %>%
+      distinct() %>%
+      mutate(id = paste0(nodeid, "_", epoch)) %>%
+      filter(!(id %in% dt_net_raw$id))
+    ) %>%
+  select(all_of(vars)) %>% 
+  distinct() %>%
+  group_by(epoch, nodeid) %>%
+  summarise(across(where(is.double), mean), .groups = "drop")
+```
+
+Before dealing with missing values, we read the `sonoma-dates` file to pair each epoch with the date and time in which the readings were taken. This way we can identify missing values in specific nodes during certain periods of time.
+
+```{r dates}
+txt <- read_file("data/sonoma-dates")
+txt_split <- str_split(txt, pattern = ";")
+epochs <- str_remove_all(txt_split[[1]][[1]], "epochNums = \\[")
+epochs <- str_remove_all(epochs, " \\]")
+epochs <- str_split(epochs, pattern = " ")
+epochs <- epochs[[1]]
+
+dates <- str_remove_all(txt_split[[1]][[2]], "\\n\\nepochDates = \\{")
+dates <- str_remove_all(dates, " \\}")
+dates <- str_split(dates, pattern = "' '")
+dates <- str_remove_all(dates[[1]], "'")
+dates <- str_replace_all(dates, pattern = "  ", replacement = " ")
+
+datetime_clean <- tibble("date" = dates, "epoch" = epochs) %>%
+  mutate(
+    month = str_sub(date, start = 5L, end = 7L),
+    day = str_remove_all(str_sub(date, start = 9L, end = 10L), " "),
+    year = str_sub(date, start = -4L),
+    time = str_sub(date, start = -13L, end = -6L)
+    ) %>%
+  mutate(
+    datetime = ymd_hms(
+      paste(
+        paste(year, month, day, sep = "-"),
+        time,
+        sep = " "
+        )
+      )
+    ) %>%
+  select(datetime, epoch) %>%
+  mutate(epoch = as.double(epoch))
+```
+
+```{r}
+dt_full <- dt_full %>%
+  left_join(datetime_clean, by = "epoch")
+```
+
+```{r, include=FALSE}
+dt_full %>%
+  filter(is.na(hamabot)) %>%
+  count(date(datetime), nodeid)
+```
+
+```{r}
+dt_full <- dt_full %>%
+  drop_na()
+```
+
+The data set now has 2.77% of missing values in `humidity`, `humid_temp`, `hamabot`, and `hamatop`. Diving deeper into these missing values we see that most of them come from node 122, which failed to register data between '2004-05-07' and '2004-05-29'. Other missing values come from node 15 which failed to register data between '2004-04-30' and '2004-05-06', and the rest come from node 128 which failed to register data between '2004-04-30' and '2004-05-05'. After removing missing values we lose less than 9,000 rows. The resulting data set has 310,179 rows and 8 columns.
+
+After removing missing values, we read the location data for each node contained in the file `mote-location-data.txt`. We join this data to the full data set using the column `ID`, which we rename to `nodeid` so the names match.
+
+```{r}
+locations <- read_table("data/mote-location-data.txt") %>%
+  rename(nodeid = ID) %>%
+  janitor::clean_names()
+
+dt_full <- dt_full %>%
+  left_join(locations, by = "nodeid") %>%
+  filter(nodeid != 65535)
+```
+
+We see that there is only one observation with `nodeid` 65535, which is clearly a mistake so we remove that observation. After joining with the location data, we have 310,178 rows and 12 columns (10 variables considering that `epoch` and `nodeid` are identifiers). Nodes 100 and 135 have no location data. We keep these observations because they are useful for parts of the analysis that do not take into account the location of the nodes.
+
+## Outlier rejection
+
+The data has plenty of outliers, many of which seem to be due to misreadings. One example is that there are many negative values for `humidity`. This variable is a percentage of relative humidity, meaning that it can be greater than 100% but never lower than 0%. After trying to identify outliers visually, we decided to follow the advice in the paper and filter out readings with voltage values lower than 2.4 or higher than 3. @tolle mention that these boundaries show that the battery of a node is running out and thus the nodes yield unreliable data. Even though some of the readings under outlier voltages were not outliers in each variable, we chose to remove them so we do not risk performing the analysis with unreliable data. Figure \@ref(fig:fig2) shows that by removing the voltage outliers, some of the humidity outliers are also removed (the value under -5000 was manually removed to make the histogram more readable). This phenomenon is mostly repeated across all the variables of interest.
+
+```{r fig2, fig.cap="Histograms of humidity before (left) and after (right) filtering extreme voltage readings.", fig.width=15, fig.height=3}
+dt_clean <- dt_full %>%
+  filter(voltage > 2.4, voltage < 3)
+
+p1 <- dt_full %>%
+  filter(humidity > -5000) %>%
+  ggplot(aes(x = humidity)) +
+  geom_histogram(binwidth = 1, fill = viridis(1)) +
+  labs(
+    title = "",
+    x = "Relative Humidity (%)",
+    y = ""
+  ) +
+  theme_bw() +
+  theme(
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank()
+  )
+
+p2 <- dt_clean %>%
+  ggplot(aes(x = humidity)) +
+  geom_histogram(binwidth = 1, fill = viridis(1)) +
+  labs(
+    title = "",
+    x = "Relative Humidity (%)",
+    y = ""
+  ) +
+  theme_bw() +
+  theme(
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank()
+  )
+
+p1 | p2
+```
+
+Now we can visualize quantiles and histograms to identify outliers in each variable. In figure \@ref(fig:fig3) we see that the horizontal axis reaches up to 125. This is because of two readings that have values 117 and 122, while the rest of the temperature readings are under 33. It seems reasonable to remove these two rows because they are clearly mistakes or misreadings. 
+
+```{r fig3, fig.cap="Histograms of temperature before (left) and after (right) removing outliers.", fig.width=15, fig.height=3}
+p1 <- dt_clean %>%
+  ggplot(aes(x = humid_temp)) +
+  geom_histogram(binwidth = 1, fill = viridis(1)) +
+  labs(
+    title = "",
+    x = "Temperature (ºC)",
+    y = ""
+  ) +
+  theme_bw() +
+  theme(
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank()
+  )
+
+dt_clean <- dt_clean %>%
+  filter(humid_temp < 116)
+
+p2 <- dt_clean %>%
+  ggplot(aes(x = humid_temp)) +
+  geom_histogram(binwidth = 1, fill = viridis(1)) +
+  labs(
+    title = "",
+    x = "Temperature (ºC)",
+    y = ""
+  ) +
+  theme_bw() +
+  theme(
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank()
+  )
+
+p1 | p2
+```
+
+For the reflected and incident PAR, we have to convert the values to the units used by @tolle. In the data set we have Lux readings and we want $\mu\text{mol}\text{ m}^{-2}\text{ s}^{-1}$, so we have to divide the columns `hamatop` (incident PAR) and `hamabot` (reflected PAR) by 54.
+
+```{r fig4, fig.cap="Histograms of reflected (left) and incident (right) PAR.", fig.width=15, fig.height=3}
+dt_clean <- dt_clean %>%
+  mutate(across(c(hamatop, hamabot), ~.x/54))
+  
+p1 <- dt_clean %>%
+  ggplot(aes(x = hamabot)) +
+  geom_histogram(binwidth = 8, fill = viridis(1)) +
+  labs(
+    title = "",
+    x = TeX("$\\mu mol(m^{-2})(s^{-1})$"),
+    y = ""
+  ) +
+  theme_bw() +
+  theme(
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank()
+  )
+
+p2 <- dt_clean %>%
+  ggplot(aes(x = hamatop)) +
+  geom_histogram(binwidth = 40, fill = viridis(1)) +
+  labs(
+    title = "",
+    x = TeX("$\\mu mol(m^{-2})(s^{-1})$"),
+    y = ""
+  ) +
+  theme_bw() +
+  theme(
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank()
+  )
+
+p1 | p2
+```
+
+Figure \@ref(fig:fig4) shows that the distributions of reflected and incident PAR are heavily skewed right. Reflected PAR has some values over 100 and incident PAR has some values over 2000. However, the histograms do not give enough information on whether these values are outliers or simply come from the heavy-tailed distributions.
+
+```{r fig5, fig.cap="Distribution of incident PAR by node and after removing node 40.", fig.width=15, fig.height=3}
+p1 <- dt_clean %>%
+  ggplot(aes(x = factor(nodeid), y = hamatop)) +
+  geom_boxplot(color = viridis(1)) +
+  labs(
+    title = "",
+    y = TeX("$\\mu mol(m^{-2})(s^{-1})$"),
+    x = "Node"
+  ) +
+  theme_bw() +
+  theme(
+    axis.text.x = element_text(angle = 90)
+  )
+
+dt_clean <- dt_clean %>%
+  filter(nodeid != 40) %>%
+  rename(reflected = hamabot, incident = hamatop)
+
+p2 <- dt_clean %>%
+  ggplot(aes(x = hamatop)) +
+  geom_histogram(binwidth = 40, fill = viridis(1)) +
+  labs(
+    title = "",
+    x = TeX("$\\mu mol(m^{-2})(s^{-1})$"),
+    y = ""
+  ) +
+  theme_bw() +
+  theme(
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank()
+  )
+
+p1 | p2
+```
+
+Figure \@ref(fig:fig5) shows that node 40 is giving extreme readings for incident PAR, not in line to what is returned by the rest of the nodes. We choose to delete the rows coming from this node because it probably was not well calibrated or malfunctioned during the deployment. The new histogram for incident PAR shows that there are no values over 2500.
+
+Repeating this analysis by node for each variable does not show any obvious patterns, so we decide to work with the data remaining so far. The resulting data set has 277,058 rows and 12 columns with 0.8% of missing values in `tree`, `dist`, `direc`, and `height` corresponding to the nodes that have no location data.
+
+\newpage
+
+# Data Exploration
+
+After looking at scatterplots of all the variables across different time windows, we decided to present two of them here. The time period chosen is the first week of data collection, which was chosen because some nodes began failing afterwards and because the correlation structure is similar across different weeks. Figure \@ref(fig:fig6) shows that there is a positive correlation (~ 0.475) between incident and reflected PAR, which follows intuition because both variables are related to sunlight. However, due to the noisy reading for these variables, it is hard to tell if the true relationship is linear. Figure \@ref(fig:fig6) also shows a strong negative correlation between humidity and temperature (~ -0.671). This is also expected since, as mentioned by @tolle, warm days are dry and colder days are more humid in California.
+
+```{r fig6, fig.cap="Pairwise scatterplots for incident vs reflected PAR, and humidity vs temperature.", fig.width=15, fig.height=3}
+
+p1 <- dt_clean %>%
+  filter(date(datetime) < "2004-05-05") %>% 
+  ggplot(aes(x = incident, y = reflected)) +
+  geom_point(color = viridis(2)[[1]], alpha = 0.5) +
+  geom_smooth(
+    formula = y ~ x,
+    method = "lm",
+    color = viridis(2)[[2]],
+    se = FALSE
+    ) +
+  labs(
+    title = "",
+    x = "Incident PAR",
+    y = "Reflected PAR"
+  ) +
+  theme_bw()
+
+p2 <- dt_clean %>%
+  filter(date(datetime) < "2004-05-05") %>% 
+  ggplot(aes(x = humid_temp, y = humidity)) +
+  geom_point(color = viridis(2)[[1]], alpha = 0.5) +
+  geom_smooth(
+    formula = y ~ x,
+    method = "lm",
+    color = viridis(2)[[2]],
+    se = FALSE
+    ) +
+  labs(
+    title = "",
+    x = "Temperature (ºC)",
+    y = "Relative Humidity (%)"
+  ) +
+  theme_bw()
+
+p1 | p2
+```
+
+To see if other variables are associated with incident PAR, we also plotted scatterplots against voltage, height of the node, and distance to the tree trunk. As shown in figure \@ref(fig:fig7), There seems to be a linear relationship characterized by a positive correlation of ~ 0.305 between incident PAR and height. Intuitively, this relationship can be explained because higher nodes have more exposure to sunlight. The linear relationship is a bit more clear between these two variables, since low height nodes have almost no high values in incident PAR.
+
+```{r fig7, fig.cap="Scatterplot for Node Height vs Incident PAR.", fig.width=9, fig.height=3}
+dt_clean %>%
+  filter(date(datetime) < "2004-05-05") %>% 
+  ggplot(aes(x = incident, y = height)) +
+  geom_point(color = viridis(2)[[1]], alpha = 0.5) +
+  geom_smooth(
+    formula = y ~ x,
+    method = "lm",
+    color = viridis(2)[[2]],
+    se = FALSE
+    ) +
+  labs(
+    title = "",
+    x = "Incident PAR",
+    y = "Node Height"
+  ) +
+  theme_bw()
+```
+
+To further illustrate our exploration, we include some time series plots using height as a color cue. Figure \@ref(fig:fig8) shows the daily time series for temperature, humidity, reflected, and incident PAR. We decided to plot the daily mean to summarise the data. We also tried to use the median but the skewness of the PAR variables collapsed all observations to zero. In humidity and temperature, the structure was the same when using mean or median. In figure \@ref(fig:fig8) we can see that higher node position is related to higher temperatures, and reflected and incident PAR, while lower nodes tend to have higher relative humidity.
+
+```{r fig8, fig.cap="Daily time series for the study variables.", fig.width=15, fig.height=8}
+temp <- dt_clean %>%
+  filter(date(datetime) < "2004-06-03") %>% 
+  group_by(date = date(datetime), height) %>%
+  summarise(across(humid_temp, mean), .groups = "drop") %>%
+  ggplot(aes(x = date, y = humid_temp, color = height, group = height)) +
+  geom_line() +
+  scale_x_date(
+    date_breaks = "3 days",
+    date_minor_breaks = "1 day",
+    limits = c(as_date("2004-04-27"), as_date("2004-06-02")),
+    expand = c(0, 0),
+    date_labels = "%B %d"
+    ) +
+  scale_color_gradient(
+    low = "orange",
+    high = "blue"
+  ) +
+  labs(
+    title = "Temperature (ºC)",
+    x = "",
+    y = "",
+    color = "Node Height"
+  ) +
+  theme_bw()
+
+humid <- dt_clean %>%
+  filter(date(datetime) < "2004-06-03") %>% 
+  group_by(date = date(datetime), height) %>%
+  summarise(across(humidity, mean), .groups = "drop") %>%
+  ggplot(aes(x = date, y = humidity, color = height, group = height)) +
+  geom_line() +
+  scale_x_date(
+    date_breaks = "3 days",
+    date_minor_breaks = "1 day",
+    limits = c(as_date("2004-04-27"), as_date("2004-06-02")),
+    expand = c(0, 0),
+    date_labels = "%B %d"
+    ) +
+  scale_color_gradient(
+    low = "orange",
+    high = "blue"
+  ) +
+  labs(
+    title = "Relative Humidity (%)",
+    x = "",
+    y = "",
+    color = "Node Height"
+  ) +
+  theme_bw()
+
+reflected <- dt_clean %>%
+  filter(date(datetime) < "2004-06-03") %>% 
+  group_by(date = date(datetime), height) %>%
+  summarise(across(reflected, mean), .groups = "drop") %>%
+  ggplot(aes(x = date, y = reflected, color = height, group = height)) +
+  geom_line() +
+  scale_x_date(
+    date_breaks = "3 days",
+    date_minor_breaks = "1 day",
+    limits = c(as_date("2004-04-27"), as_date("2004-06-02")),
+    expand = c(0, 0),
+    date_labels = "%B %d"
+    ) +
+  scale_color_gradient(
+    low = "orange",
+    high = "blue"
+  ) +
+  labs(
+    title = "Reflected PAR",
+    x = "",
+    y = "",
+    color = "Node Height"
+  ) +
+  theme_bw()
+
+incident <- dt_clean %>%
+  filter(date(datetime) < "2004-06-03") %>% 
+  group_by(date = date(datetime), height) %>%
+  summarise(across(incident, mean), .groups = "drop") %>%
+  ggplot(aes(x = date, y = incident, color = height, group = height)) +
+  geom_line() +
+  scale_x_date(
+    date_breaks = "3 days",
+    date_minor_breaks = "1 day",
+    limits = c(as_date("2004-04-27"), as_date("2004-06-02")),
+    expand = c(0, 0),
+    date_labels = "%B %d"
+    ) +
+  scale_color_gradient(
+    low = "orange",
+    high = "blue"
+  ) +
+  labs(
+    title = "Incident PAR",
+    x = "",
+    y = "",
+    color = "Node Height"
+  ) +
+  theme_bw()
+
+(temp|humid)/(reflected|incident) + plot_layout(guides = "collect")
+```
+
+Figure \@ref(fig:fig8) also shows some strange behaviors in the nodes. We see some truncated lines showing that we have no more readings for the corresponding nodes. We can also see that most nodes give an unusual reading before they are truncated. This unusual measurements were not detected during outlier rejection because they are evident when looking at the daily average by height, but not when looking at the complete distribution of the variables. We can also note two valleys in the PAR variables, corresponding to May 7th and May 26th. These two valleys most likely come from cloudy days in which the mean measured values shrinks close to zero.
+
+To conclude this section we include a PCA of the data. For the PCA we include the four variables (humidity, temperature, reflected PAR, and incident PAR) along with the node heights and the distance from the tree trunk. We remove the rows for which we have no location information. We also center and scale the data before performing PCA.
+
+```{r}
+pca <- dt_clean %>%
+  select(humidity, humid_temp, reflected, incident, dist, height) %>%
+  drop_na() %>%
+  prcomp(center = TRUE, scale = TRUE)
+
+factoextra::fviz_eig(
+  pca,
+  barfill = viridis(3)[[2]],
+  linecolor = viridis(3)[[1]],
+  ggtheme = theme_bw(),
+  addlabels = TRUE
+  )
+
+get_eig(pca) %>%
+  tibble() %>%
+  rename(cumvar = cumulative.variance.percent) %>% 
+  ggplot(aes(x = 1L:6L, y = cumvar/100)) +
+  geom_point() +
+  geom_line() +
+  geom_text(
+    aes(label = paste0(round(cumvar, 1), "%")),
+    vjust = "outward",
+    hjust = "outward"
+    )
+```
+
+
+# Interesting Findings
+
+# Graph Critique
+
+\newpage
+
+# Bibliography
