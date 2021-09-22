@@ -1,7 +1,7 @@
 ---
 title: "Project 1 - Redwood Data Report"
 author:
-- Johnny Antoun (StudentID)
+- Johnny Antoun (0679537)
 - Jose Pliego (2716768)
 date: "September 23, 2021"
 output:
