@@ -1,7 +1,7 @@
 ---
 title: "Project 1 - Redwood Data Report"
 author:
-- Johnny Antoun (0679537)
+- Johnny Antoun (StudentID)
 - Jose Pliego (2716768)
 date: "September 23, 2021"
 output:
@@ -43,8 +43,10 @@ pacman::p_load(
 ```
 
 ```{r data}
-dt_log_raw <- read_csv("data/sonoma-data-log.csv")
-dt_net_raw <- read_csv("data/sonoma-data-net.csv")
+dt_log_raw <- read_csv("data/sonoma-data-log.csv") %>%
+  mutate(source = "log")
+dt_net_raw <- read_csv("data/sonoma-data-net.csv") %>%
+  mutate(source = "net")
 ```
 
 \newpage
@@ -112,11 +114,13 @@ We talk about how we dealt with outliers later in this report. For now, we conca
 vars <- c(
   "epoch", "nodeid", "voltage", "humidity", "humid_temp", "hamatop", "hamabot"
   )
-dt_full <- dt_net_raw %>%
+dt_net_raw <- dt_net_raw %>%
   mutate(voltage = 0.6 * 1024/voltage) %>%
   select(-result_time) %>% 
   distinct() %>%
-  mutate(id = paste0(nodeid, "_", epoch)) %>% 
+  mutate(id = paste0(nodeid, "_", epoch))
+
+dt_full <- dt_net_raw %>%
   bind_rows(
     dt_log_raw %>%
       select(-result_time) %>%
@@ -333,7 +337,7 @@ dt_clean <- dt_clean %>%
   rename(reflected = hamabot, incident = hamatop)
 
 p2 <- dt_clean %>%
-  ggplot(aes(x = hamatop)) +
+  ggplot(aes(x = incident)) +
   geom_histogram(binwidth = 40, fill = viridis(1)) +
   labs(
     title = "",
@@ -419,7 +423,7 @@ dt_clean %>%
   theme_bw()
 ```
 
-To further illustrate our exploration, we include some time series plots using height as a color cue. Figure \@ref(fig:fig8) shows the daily time series for temperature, humidity, reflected, and incident PAR. We decided to plot the daily mean to summarise the data. We also tried to use the median but the skewness of the PAR variables collapsed all observations to zero. In humidity and temperature, the structure was the same when using mean or median. In figure \@ref(fig:fig8) we can see that higher node position is related to higher temperatures, and reflected and incident PAR, while lower nodes tend to have higher relative humidity.
+To further illustrate our exploration, we include some time series plots using height as a color cue. Figure \@ref(fig:fig8) shows the daily time series for temperature, humidity, reflected, and incident PAR. We decided to plot the daily mean to summarise the data. We also tried to use the median but the skewness of the PAR variables collapsed all observations to zero. In humidity and temperature, the structure was the same when using mean or median. In figure \@ref(fig:fig8) we can see that higher node position is related to slightly higher temperatures, and reflected and incident PAR, while lower nodes tend to have slightly higher relative humidity.
 
 ```{r fig8, fig.cap="Daily time series for the study variables.", fig.width=15, fig.height=8}
 temp <- dt_clean %>%
@@ -529,33 +533,43 @@ Figure \@ref(fig:fig8) also shows some strange behaviors in the nodes. We see so
 
 To conclude this section we include a PCA of the data. For the PCA we include the four variables (humidity, temperature, reflected PAR, and incident PAR) along with the node heights and the distance from the tree trunk. We remove the rows for which we have no location information. We also center and scale the data before performing PCA.
 
-```{r}
+```{r fig9, fig.cap="Screeplot and cumulative variance explained.", fig.width=15, fig.height=4}
 pca <- dt_clean %>%
   select(humidity, humid_temp, reflected, incident, dist, height) %>%
   drop_na() %>%
   prcomp(center = TRUE, scale = TRUE)
 
-factoextra::fviz_eig(
+p1 <- factoextra::fviz_eig(
   pca,
   barfill = viridis(3)[[2]],
   linecolor = viridis(3)[[1]],
   ggtheme = theme_bw(),
   addlabels = TRUE
-  )
+  ) +
+  labs(y = "VarExplained", title = "")
 
-get_eig(pca) %>%
+p2 <- get_eig(pca) %>%
   tibble() %>%
   rename(cumvar = cumulative.variance.percent) %>% 
   ggplot(aes(x = 1L:6L, y = cumvar/100)) +
   geom_point() +
-  geom_line() +
+  geom_line(color = viridis(3)[[2]]) +
   geom_text(
     aes(label = paste0(round(cumvar, 1), "%")),
     vjust = "outward",
     hjust = "outward"
-    )
-```
+    ) +
+  scale_y_continuous(
+    limits = c(0.1, 1.1),
+    breaks = seq(from = 0, to = 1, by = 0.2),
+    labels = scales::label_percent()
+    ) +
+  scale_x_continuous(breaks = 1L:6L, limits = c(0.9, 6.1)) +
+  labs(y = "CumVarExplained", x = "Dimensions") +
+  theme_bw()
 
+p1 | p2
+```
 
 # Interesting Findings
 
