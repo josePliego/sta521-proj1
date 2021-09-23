@@ -20,7 +20,6 @@ dt_clean_week = dt_clean %>%
 variables = c("humidity", "humid_temp","hamabot","hamatop")
 dt_clean_week[,variables] %>% 
 ggpairs()
-
 ```
 
 We decided to plot scatterplots using time period of 1 week. We found this to be reasonable as some nodes began failing afterwards. We notice similar correlation structure between the weeks. We observe that Incident and Reflected PAR have significant positive correlation (~0.475). This is expected as both measures relate to sunlight. Additionally, humidity and temperature are strongly, negatively correlated (~0.671), which makes sense because according to the paper, in California, warm days are dry and colder days are humid.
@@ -63,17 +62,19 @@ Yes, we can represent data in lower dimension. Looking at cumulative PVE we see 
 
 hist(dt_clean$hamatop)
 
+```{r}
 dt_clean %>% 
 select(hamatop) %>% 
 mutate(log_hamatop = log(hamatop)) %>% 
-ggplot(aes(x=log_hamatop)) + geom_histogram()
-
-hist(dt_clean$hamabot)
+ggplot(aes(x=log_hamatop)) + geom_histogram(binwidth = 0.5) 
 
 dt_clean %>% 
 select(hamabot) %>% 
 mutate(log_hamabot = log(hamabot)) %>% 
-ggplot(aes(x=log_hamabot)) + geom_histogram()
+ggplot(aes(x=log_hamabot)) + geom_histogram(binwidth=0.4)
+```
+
+
 
 ### Exercise 5-b
 
