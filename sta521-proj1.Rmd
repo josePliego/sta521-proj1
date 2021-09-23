@@ -1,7 +1,7 @@
 ---
 title: "Project 1 - Redwood Data Report"
 author:
-- Johnny Antoun (StudentID)
+- Johnny Antoun (0679537)
 - Jose Pliego (2716768)
 date: "September 23, 2021"
 output:
@@ -531,7 +531,7 @@ incident <- dt_clean %>%
 
 Figure \@ref(fig:fig8) also shows some strange behaviors in the nodes. We see some truncated lines showing that we have no more readings for the corresponding nodes. We can also see that most nodes give an unusual reading before they are truncated. This unusual measurements were not detected during outlier rejection because they are evident when looking at the daily average by height, but not when looking at the complete distribution of the variables. We can also note two valleys in the PAR variables, corresponding to May 7th and May 26th. These two valleys most likely come from cloudy days in which the mean measured values shrinks close to zero.
 
-To conclude this section we include a PCA of the data. For the PCA we include the four variables (humidity, temperature, reflected PAR, and incident PAR) along with the node heights and the distance from the tree trunk. We remove the rows for which we have no location information. We also center and scale the data before performing PCA.
+To conclude this section we include a PCA of the data. For the PCA we include the four variables (humidity, temperature, reflected PAR, and incident PAR) along with the node heights and the distance from the tree trunk. We remove the rows for which we have no location information. We also center and scale the data before performing PCA. Figure \@ref(fig:fig) shows that more 75% of the variability in the data can be explained by the first three principal components, so this data set could be reasonably approximated by some low-dimensional representation.
 
 ```{r fig9, fig.cap="Screeplot and cumulative variance explained.", fig.width=15, fig.height=4}
 pca <- dt_clean %>%
@@ -541,8 +541,8 @@ pca <- dt_clean %>%
 
 p1 <- factoextra::fviz_eig(
   pca,
-  barfill = viridis(3)[[2]],
-  linecolor = viridis(3)[[1]],
+  barfill = viridis(3)[[1]],
+  linecolor = viridis(3)[[2]],
   ggtheme = theme_bw(),
   addlabels = TRUE
   ) +
@@ -553,7 +553,7 @@ p2 <- get_eig(pca) %>%
   rename(cumvar = cumulative.variance.percent) %>% 
   ggplot(aes(x = 1L:6L, y = cumvar/100)) +
   geom_point() +
-  geom_line(color = viridis(3)[[2]]) +
+  geom_line(color = viridis(3)[[1]]) +
   geom_text(
     aes(label = paste0(round(cumvar, 1), "%")),
     vjust = "outward",
@@ -571,9 +571,103 @@ p2 <- get_eig(pca) %>%
 p1 | p2
 ```
 
+\newpage
+
 # Interesting Findings
 
+First, one of the main findings from the exploratory data analysis is that there seems to be a relationship between temperature and humidity, and height. We see in figure \@ref(fig:fig8) that higher nodes tend to be associated with higher temperatures and lower humidity. This jumps out directly from the time series plots, while the original article does not see this relationship until they plot the differences from each timestep mean.
+
+Second, in the time series plots we also found out that, even after removing outlier voltage readings, the nodes tend to give unusual readings just before running out of battery. This was not apparent in the original paper because these unusual readings are not unusual in the context of the overall distribution, but are outliers when looking at a given epoch for all the nodes.
+
+Lastly, we performed a K-Means clustering analysis to confirm that humidity and temperature have some inherent relation to the height of the nodes. We compute the average temperature and humidity by height, apply the K-Means algorithm with two centers and then look at the distribution of height by cluster. If there is no inherent relationship between height and both humidity and temperature, we would expect the distributions by cluster to be completely overlapping. However, as seen in figure \@ref(fig:fig10), the distributions by cluster show significant differences, with cluster 1 having the higher nodes.
+
+```{r fig10, fig.cap="Distribution of height by cluster.", fig.width=7, fig.height=4}
+dt_height <- dt_clean %>%
+  group_by(height) %>%
+  summarise(across(c(humidity, humid_temp), mean))
+
+set.seed(42)
+clust <- dt_height %>%
+  select(-height) %>%
+  kmeans(centers = 2, nstart = 10)
+
+dt_height %>%
+  mutate(cluster = factor(clust$cluster)) %>%
+  ggplot(aes(x = height, fill = cluster, group = cluster)) +
+  geom_density(alpha = 0.7, color = FALSE) +
+  labs(
+    title = "",
+    x = "Height (m)",
+    y = "",
+    fill = "Cluster"
+  ) +
+  scale_fill_viridis_d() +
+  theme_bw()
+```
+
+\newpage
+
 # Graph Critique
+
+Because of the heavy-tailed distributions of reflected and incident PAR, a log transformation yields a better visualization, as seen in figure \@ref(fig:fig11). An important detail in this figure is that we have many values of reflected and incident PAR that are zero, so taking the log transform removes these values. This may still be useful for analysis that do not care about zero-valued readings.
+
+```{r fig11, fig.cap="Distribution of log-transformed reflected PAR (right) and incident PAR (left).", fig.width=15, fig.height=3}
+p1 <- dt_clean %>% 
+  mutate(log_hamatop = log(reflected)) %>% 
+  ggplot(aes(x = log_hamatop)) +
+  geom_histogram(binwidth = 0.4, fill = viridis(1)) +
+  labs(y = "", x = TeX("$\\mu mol(m^{-2})(s^{-1})$")) +
+  theme_bw() +
+  theme(
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank()
+  )
+
+p2 <- dt_clean %>% 
+  mutate(log_hamatop = log(incident)) %>% 
+  ggplot(aes(x = log_hamatop)) +
+  geom_histogram(binwidth = 0.5, fill = viridis(1)) +
+  labs(y = "", x = TeX("$\\mu mol(m^{-2})(s^{-1})$")) +
+  theme_bw() +
+  theme(
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank()
+  )
+p1 | p2
+```
+
+The figures 3[c] and 3[d] in the paper by @tolle try to showcase the relationship between height and temperature, humidity, reflected PAR, and incident PAR. Even though we think that the plots do a good work showing what the authors intended, we also think that there could be better ways to show these findings. First of all, a better visualization is given by the time series in figure \@ref(fig:fig8). Another useful visualization for this relationship is the one shown on figure \@ref(fig:fig10). Finally, another visualization could be made by creating height bins instead of showing boxplots for every height value. We create three bins, labeled "low", "medium", and "high" by dividing height in three intervals of the same length. One example of the resulting visualizations is shown in figure \@ref(fig:fig12). Even though the distinction between bins is not perfect, this graph is easier to read than the ones in the paper and tells a similar story.
+
+```{r fig12, fig.cap="Distribution of humidity by height group.", fig.width=15, fig.height=3}
+threshold <-
+  (max(dt_clean$height, na.rm = TRUE) - min(dt_clean$height, na.rm = TRUE))/3
+
+dt_bin <- dt_clean %>%
+  mutate(
+    height_bin = case_when(
+      height <= threshold ~ "Low",
+      height <= 2*threshold ~ "Medium",
+      TRUE ~ "High"
+    )
+  )
+
+dt_bin %>%
+  mutate(
+    across(
+      height_bin,
+      ~factor(.x, levels = c("Low", "Medium", "High"), ordered = TRUE)
+      )
+  ) %>%
+  filter(reflected > 0) %>%
+  ggplot(aes(x = factor(height_bin), y = humidity)) +
+  geom_boxplot(fill = viridis(2)[[2]]) +
+  theme_bw() +
+  labs(x = "", y = "Relative Humidity (%)")
+```
+
+For the first two plots in figure 4 in the paper, the colors are difficult to tell apart and do not convey any meaning. Also, the plots on the right are difficult to interpret. A better visualization is given by the time series in figure \@ref(fig:fig8). By choosing an appropriate color gradient, we can mix the information shown in the two original plots in a single time series visualization.
+
+Lastly, in figure 7 of the paper the authors try to show the differences between the log and network yields. We think this visualization could be more clear if the authors plotted both data sources in the same graphs, putting the bars side by side and using color to distinguish between the log and the network.
 
 \newpage
 
